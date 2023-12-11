@@ -26,6 +26,7 @@ to make automatic initialization process more smoothly`,
 		Subcommands: []cli.Command{
 			subcmdCreateUser,
 			subcmdCreateRepo,
+			subcmdMigrateRepo,
 
 			subcmdDeleteInactivateUsers,
 			subcmdDeleteRepositoryArchives,
@@ -59,6 +60,22 @@ to make automatic initialization process more smoothly`,
 			stringFlag("private", "false", "Private repository"),
 			stringFlag("unlisted", "false", "Listable repository"),
 			stringFlag("mirror", "false", "Whether the repository is a mirror"),
+
+
+			stringFlag("config, c", "", "Custom configuration file path"),
+		},
+	}
+	subcmdMigrateRepo = cli.Command{
+		Name:   "migrate-repo",
+		Usage:  "Migrate a new repo in database for a user",
+		Action: runMigrateRepo,
+		Flags: []cli.Flag{
+			stringFlag("username", "", "Username of repository's owner"),
+			stringFlag("repository_name", "", "Repository name"),
+			stringFlag("private", "false", "Private repo"),
+			stringFlag("unlisted", "false", "Should it be searchable"),
+			stringFlag("mirror", "false", "is it mirror repo?"),
+			stringFlag("clone_url", "", "remote address to clone from"),
 
 			stringFlag("config, c", "", "Custom configuration file path"),
 		},
@@ -227,6 +244,53 @@ func runCreateRepo(c *cli.Context) error {
 	}
 
 	fmt.Printf("New repository %q has been successfully created!\n", repo.Name)
+	return nil
+}
+
+func runMigrateRepo(c *cli.Context) error {
+	if !c.IsSet("username") {
+		return errors.New("Username is not specified")
+	} else if !c.IsSet("repository_name") {
+		return errors.New("Respository name is not specified")
+	} else if !c.IsSet("clone_url") {
+		return errors.New("default branch is not specified")
+	}
+
+	err := conf.Init(c.String("config"))
+	if err != nil {
+		return errors.Wrap(err, "init configuration")
+	}
+	conf.InitLogging(true)
+
+	if _, err = db.SetEngine(); err != nil {
+		return errors.Wrap(err, "set engine")
+	}
+	//	find user by username
+	user, err := db.Users.GetByUsername(
+		context.Background(),
+		c.String("username"),
+	)
+	if err != nil {
+		return errors.Wrap(err, "No user was found with "+c.String("username"))
+	}
+
+	repo, err := db.MigrateRepository(
+		user,
+		user,
+		db.MigrateRepoOptions{
+			Name:        c.String("repository_name"),
+			Description: "",
+			IsPrivate:   c.Bool("private") || conf.Repository.ForcePrivate,
+			IsUnlisted:  c.Bool("unlisted"),
+			IsMirror:    c.Bool("mirror"),
+			RemoteAddr:  c.String("clone_url"),
+		})
+
+	if err != nil {
+		return errors.Wrap(err, "Repo")
+	}
+
+	fmt.Printf("New repository %q has been successfully migrated!\n", repo.Name)
 	return nil
 }
 
