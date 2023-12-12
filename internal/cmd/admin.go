@@ -66,7 +66,7 @@ to make automatic initialization process more smoothly`,
 		},
 	}
 	subcmdMigrateRepo = cli.Command{
-		Name:   "migrate-repo",
+		Name:   "migrate-repository",
 		Usage:  "Migrate a new repo in database for a user",
 		Action: runMigrateRepo,
 		Flags: []cli.Flag{
